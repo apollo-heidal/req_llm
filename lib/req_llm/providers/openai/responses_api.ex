@@ -106,6 +106,8 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       component: :provider
     )
 
+    # IO.inspect(data, label: "event_type #{event_type}: ", pretty: true)
+
     case event_type do
       "response.output_text.delta" ->
         text = data["delta"] || ""
@@ -146,8 +148,162 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       "response.output_item.added" ->
         handle_output_item_added(data)
 
+      # response.output_item.done: : %{
+      #   "item" => %{
+      #     "id" => "fs_0191beda6f86d332c...",
+      #     "queries" => ["What is SIBO?",
+      #      "What is small intestinal bacterial overgrowth (SIBO)?",
+      #      "Definition of SIBO and brief explanation",
+      #      "SIBO short definition causes symptoms"],
+      #     "results" => nil,
+      #     "status" => "completed",
+      #     "type" => "file_search_call"
+      #   },
+      #   "output_index" => 1,
+      #   "sequence_number" => 8,
+      #   "type" => "response.output_item.done"
+      # }
+
+      # response.output_item.done: : %{
+      #   "item" => %{
+      #     "id" => "fs_0e20850332f17af500...",
+      #     "queries" => ["What is an electron?"],
+      #     "results" => nil,
+      #     "status" => "completed",
+      #     "type" => "file_search_call"
+      #   },
+      #   "output_index" => 1,
+      #   "sequence_number" => 8,
+      #   "type" => "response.output_item.done"
+      # }
       "response.output_item.done" ->
         []
+
+      # %{
+      #   "annotation" => %{
+      #     "file_id" => "file-9xDmf...",
+      #     "filename" => <filename>,
+      #     "index" => 0,
+      #     "type" => "file_citation"
+      #   },
+      #   "annotation_index" => 1,
+      #   "content_index" => 0,
+      #   "item_id" => "msg_041...",
+      #   "output_index" => 3,
+      #   "sequence_number" => 68,
+      #   "type" => "response.output_text.annotation.added"
+      # }
+      "response.output_text.annotation.added" ->
+        case Map.get(data, "annotation") do
+          nil ->
+            []
+
+          annotation ->
+            [
+              ReqLLM.StreamChunk.text(Map.get(annotation, "filename", ""), %{
+                type: :file_citation
+              })
+            ]
+        end
+
+      # response.completed: : %{
+      #   "response" => %{
+      #     "background" => false,
+      #     "created_at" => 1763859207,
+      #     "error" => nil,
+      #     "id" => "resp_0191beda6f86d3320069225b06fac8819aa02f137d2955113a",
+      #     "incomplete_details" => nil,
+      #     "instructions" => nil,
+      #     "max_output_tokens" => nil,
+      #     "max_tool_calls" => nil,
+      #     "metadata" => %{},
+      #     "model" => "gpt-5-mini-2025-08-07",
+      #     "object" => "response",
+      #     "output" => [
+      #       %{
+      #         "id" => "rs_0191beda6f86d3320069225b074f78819a853383acdb1c827e",
+      #         "summary" => [],
+      #         "type" => "reasoning"
+      #       },
+      #       %{
+      #         "id" => "fs_0191beda6f86d3320069225b09b2e8819aa4cd50d00a6a23bc",
+      #         "queries" => ["What is SIBO?",
+      #          "What is small intestinal bacterial overgrowth (SIBO)?",
+      #          "Definition of SIBO and brief explanation",
+      #          "SIBO short definition causes symptoms"],
+      #         "results" => nil,
+      #         "status" => "completed",
+      #         "type" => "file_search_call"
+      #       },
+      #       %{
+      #         "id" => "rs_0191beda6f86d3320069225b0db9d0819aac6a981b4553f12f",
+      #         "summary" => [],
+      #         "type" => "reasoning"
+      #       },
+      #       %{
+      #         "content" => [
+      #           %{
+      #             "annotations" => [
+      #               %{
+      #                 "file_id" => "file-9xDmfH9EzTrQhKYuW14z2Y",
+      #                 "filename" => "Functional-Nutrition-Program__Digestive-Intensive__sibo-article.md",
+      #                 "index" => 206,
+      #                 "type" => "file_citation"
+      #               },
+      #               %{
+      #                 "file_id" => "file-Np2Si9LTNfdVrhhhwG3Pba",
+      #                 "filename" => "Functional-Nutrition-Program__Digestive-Intensive__FNL-Understanding-SIBO.md",
+      #                 "index" => 310,
+      #                 "type" => "file_citation"
+      #               }
+      #             ],
+      #             "logprobs" => [],
+      #             "text" => "SIBO (small intestinal bacterial overgrowth) is an increased number and/or abnormal type of bacteria colonizing the small intestine that ferment food, produce excess gas, and disrupt digestion and motility . Common symptoms include bloating, gas/belching, abdominal pain, diarrhea or constipation, and fatigue .",
+      #             "type" => "output_text"
+      #           }
+      #         ],
+      #         "id" => "msg_0191beda6f86d3320069225b26f414819aaa06d84a754ec87b",
+      #         "role" => "assistant",
+      #         "status" => "completed",
+      #         "type" => "message"
+      #       }
+      #     ],
+      #     "parallel_tool_calls" => true,
+      #     "previous_response_id" => nil,
+      #     "prompt_cache_key" => nil,
+      #     "prompt_cache_retention" => nil,
+      #     "reasoning" => %{"effort" => "medium", "summary" => nil},
+      #     "safety_identifier" => nil,
+      #     "service_tier" => "default",
+      #     "status" => "completed",
+      #     "store" => true,
+      #     "temperature" => 1.0,
+      #     "text" => %{"format" => %{"type" => "text"}, "verbosity" => "medium"},
+      #     "tool_choice" => "auto",
+      #     "tools" => [
+      #       %{
+      #         "filters" => nil,
+      #         "max_num_results" => 20,
+      #         "ranking_options" => %{"ranker" => "auto", "score_threshold" => 0.0},
+      #         "type" => "file_search",
+      #         "vector_store_ids" => ["vs_68fecd452fdc8191956539e51de3fbba"]
+      #       }
+      #     ],
+      #     "top_logprobs" => 0,
+      #     "top_p" => 1.0,
+      #     "truncation" => "disabled",
+      #     "usage" => %{
+      #       "input_tokens" => 17986,
+      #       "input_tokens_details" => %{"cached_tokens" => 0},
+      #       "output_tokens" => 609,
+      #       "output_tokens_details" => %{"reasoning_tokens" => 512},
+      #       "total_tokens" => 18595
+      #     },
+      #     "user" => nil
+      #   },
+      #   "sequence_number" => 81,
+      #   "type" => "response.completed"
+      # }
 
       "response.completed" ->
         usage_data = get_in(data, ["response", "usage"])
@@ -522,6 +678,9 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       [%{"type" => "web_search_preview"} | tools]
     end
   end
+
+  defp encode_tool_for_responses_api(%{remote: true} = remote_tool),
+    do: Map.delete(remote_tool, :remote)
 
   defp encode_tool_for_responses_api(%ReqLLM.Tool{} = tool) do
     schema = ReqLLM.Tool.to_schema(tool)
