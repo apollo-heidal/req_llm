@@ -533,17 +533,6 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
 
     base_url = ReqLLM.Provider.Options.effective_base_url(ReqLLM.Providers.OpenAI, model, opts)
 
-    provider_opts =
-      opts
-      |> Keyword.get(:provider_options, [])
-      |> Map.new()
-      |> Map.to_list()
-      |> IO.inspect(
-        label: "ResponsesAPI.attach_stream provider_opts: ",
-        pretty: true,
-        structs: false
-      )
-
     cleaned_opts =
       opts
       |> Keyword.delete(:finch_name)
