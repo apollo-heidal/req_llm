@@ -106,7 +106,9 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       component: :provider
     )
 
-    # IO.inspect(data, label: "event_type #{event_type}: ", pretty: true)
+    # if event_type != "response.output_text.delta" do
+    # IO.inspect(data, label: "#{event_type}: ", pretty: true, structs: false)
+    # end
 
     case event_type do
       "response.output_text.delta" ->
@@ -177,7 +179,59 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       #   "type" => "response.output_item.done"
       # }
       "response.output_item.done" ->
-        []
+        case Map.get(data["item"], "type", nil) do
+          "file_search_call" ->
+            # IO.inspect(data["item"],
+            #   label: "data[\"item\"] in response.output_item.done: ",
+            #   pretty: true,
+            #   structs: false
+            # )
+
+            case Map.get(data["item"], "status", nil) do
+              "completed" ->
+                [
+                  ReqLLM.StreamChunk.meta(%{
+                    type: :file_search,
+                    queries: Map.get(data["item"], "queries", [])
+                  })
+                ] ++
+                  Enum.map(Map.get(data["item"], "results", []), fn result ->
+                    ReqLLM.StreamChunk.meta(%{
+                      type: :file_citation,
+                      file_id: Map.get(result, "file_id", ""),
+                      filename: Map.get(result, "filename", ""),
+                      score: Map.get(result, "score", 0),
+                      text: Map.get(result, "text", "")
+                    })
+                  end)
+
+              _ ->
+                []
+            end
+
+          _ ->
+            []
+        end
+
+      #   IO.inspect(Map.keys(data),
+      #     label: "Map.keys(data) in response.output_item.done: ",
+      #     pretty: true,
+      #     structs: false
+      #   )
+
+      #   IO.inspect(Map.keys(data["item"]),
+      #     label: "Map.keys(data[\"item\"]) in response.output_item.done: ",
+      #     pretty: true,
+      #     structs: false
+      #   )
+
+      #   IO.inspect(data["item"]["type"],
+      #     label: ~s(data["item"]["type"] in response.output_item.done: ),
+      #     pretty: true,
+      #     structs: false
+      #   )
+
+      #   IO.inspect(data, label: "response.output_item.done: ", pretty: true, structs: false)
 
       # %{
       #   "annotation" => %{
@@ -194,17 +248,21 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       #   "type" => "response.output_text.annotation.added"
       # }
       "response.output_text.annotation.added" ->
-        case Map.get(data, "annotation") do
-          nil ->
-            []
+        []
 
-          annotation ->
-            [
-              ReqLLM.StreamChunk.text(Map.get(annotation, "filename", ""), %{
-                type: :file_citation
-              })
-            ]
-        end
+      # case Map.get(data, "annotation") do
+      #   nil ->
+      #     []
+
+      #   annotation ->
+      #     [
+      #       ReqLLM.StreamChunk.meta(%{
+      #         type: :file_citation,
+      #         file_id: Map.get(annotation, "file_id", ""),
+      #         filename: Map.get(annotation, "filename", "")
+      #       })
+      #     ]
+      # end
 
       # response.completed: : %{
       #   "response" => %{
@@ -304,7 +362,6 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       #   "sequence_number" => 81,
       #   "type" => "response.completed"
       # }
-
       "response.completed" ->
         usage_data = get_in(data, ["response", "usage"])
         response_id = get_in(data, ["response", "id"])
@@ -432,7 +489,15 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
         opts_map[:max_completion_tokens] ||
         opts_map[:max_tokens]
 
-    temp_request = request || %{options: opts_map}
+    temp_request =
+      request ||
+        %{options: opts_map}
+        |> IO.inspect(
+          label: "ResponsesAPI.build_request_body temp_request: ",
+          pretty: true,
+          structs: false
+        )
+
     tools = encode_tools_if_any(temp_request) |> ensure_deep_research_tools(temp_request)
 
     tool_choice = encode_tool_choice(opts_map[:tool_choice])
@@ -450,6 +515,8 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       |> maybe_put_string("tools", tools)
       |> maybe_put_string("tool_choice", tool_choice)
       |> maybe_put_string("text", text_format)
+      |> maybe_put_string("include", opts_map[:include])
+      |> IO.inspect(label: "ResponsesAPI.build_request_body body: ", pretty: true, structs: false)
 
     if previous_response_id do
       Map.put(body, "previous_response_id", previous_response_id)
@@ -466,6 +533,17 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
 
     base_url = ReqLLM.Provider.Options.effective_base_url(ReqLLM.Providers.OpenAI, model, opts)
 
+    provider_opts =
+      opts
+      |> Keyword.get(:provider_options, [])
+      |> Map.new()
+      |> Map.to_list()
+      |> IO.inspect(
+        label: "ResponsesAPI.attach_stream provider_opts: ",
+        pretty: true,
+        structs: false
+      )
+
     cleaned_opts =
       opts
       |> Keyword.delete(:finch_name)
@@ -476,8 +554,13 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       |> Keyword.put(:context, context)
       |> Keyword.put(:base_url, base_url)
 
-    body = build_request_body(context, model.id, cleaned_opts, nil)
-    url = build_request_url(cleaned_opts)
+    body =
+      build_request_body(context, model.id, cleaned_opts, nil)
+      |> IO.inspect(label: "ResponsesAPI.attach_stream body: ", pretty: true, structs: false)
+
+    url =
+      build_request_url(cleaned_opts)
+      |> IO.inspect(label: "ResponsesAPI.attach_stream url: ", pretty: true, structs: false)
 
     {:ok, Finch.build(:post, url, headers, Jason.encode!(body))}
   rescue

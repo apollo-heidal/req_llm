@@ -102,6 +102,12 @@ defmodule ReqLLM.Streaming.FinchClient do
   defp build_stream_request(provider_mod, model, context, opts, finch_name) do
     alias ReqLLM.Streaming.Fixtures
 
+    IO.inspect(opts,
+      label: "FinchClient.build_stream_request: ",
+      pretty: true,
+      structs: false
+    )
+
     with {:ok, finch_request} <- provider_mod.attach_stream(model, context, opts, finch_name),
          :ok <- validate_http2_body_size(finch_request, finch_name) do
       http_context = Fixtures.HTTPContext.from_finch_request(finch_request)
@@ -169,6 +175,12 @@ defmodule ReqLLM.Streaming.FinchClient do
             acc
 
           {:data, chunk}, acc ->
+            # IO.inspect(chunk,
+            #   label: "chunk in FinchClient.start_streaming_task: ",
+            #   pretty: true,
+            #   structs: false
+            # )
+
             StreamServer.http_event(stream_server_pid, {:data, chunk})
             acc
 
@@ -193,6 +205,12 @@ defmodule ReqLLM.Streaming.FinchClient do
         receive_timeout = Keyword.get(opts, :receive_timeout, default_timeout)
 
         try do
+          # IO.inspect(finch_request,
+          #   label: "finch_request in FinchClient.start_streaming_task: ",
+          #   pretty: true,
+          #   structs: false
+          # )
+
           case Finch.stream(finch_request, finch_name, :ok, finch_stream_callback,
                  receive_timeout: receive_timeout
                ) do
