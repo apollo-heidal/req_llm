@@ -498,7 +498,19 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
           structs: false
         )
 
-    tools = encode_tools_if_any(temp_request) |> ensure_deep_research_tools(temp_request)
+    tools =
+      encode_tools_if_any(temp_request)
+      |> IO.inspect(
+        label: "ResponsesAPI.build_request_body encode_tools_if_any: ",
+        pretty: true,
+        structs: false
+      )
+      |> ensure_deep_research_tools(temp_request)
+      |> IO.inspect(
+        label: "ResponsesAPI.build_request_body ensure_deep_research_tools: ",
+        pretty: true,
+        structs: false
+      )
 
     tool_choice = encode_tool_choice(opts_map[:tool_choice])
     reasoning = encode_reasoning_effort(opts_map[:reasoning_effort])
@@ -515,7 +527,8 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       |> maybe_put_string("tools", tools)
       |> maybe_put_string("tool_choice", tool_choice)
       |> maybe_put_string("text", text_format)
-      |> maybe_put_string("include", opts_map[:include])
+      # Do a deep atom -> string conversion for provider_opts
+      |> Map.merge(stringify_keys(provider_opts))
       |> IO.inspect(label: "ResponsesAPI.build_request_body body: ", pretty: true, structs: false)
 
     if previous_response_id do
@@ -542,14 +555,17 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       |> Keyword.put(:model, model.id)
       |> Keyword.put(:context, context)
       |> Keyword.put(:base_url, base_url)
+      |> IO.inspect(
+        label: "ResponsesAPI.attach_stream cleaned_opts: ",
+        pretty: true,
+        structs: false
+      )
 
     body =
       build_request_body(context, model.id, cleaned_opts, nil)
       |> IO.inspect(label: "ResponsesAPI.attach_stream body: ", pretty: true, structs: false)
 
-    url =
-      build_request_url(cleaned_opts)
-      |> IO.inspect(label: "ResponsesAPI.attach_stream url: ", pretty: true, structs: false)
+    url = build_request_url(cleaned_opts)
 
     {:ok, Finch.build(:post, url, headers, Jason.encode!(body))}
   rescue
