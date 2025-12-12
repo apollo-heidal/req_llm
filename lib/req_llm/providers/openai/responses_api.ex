@@ -106,9 +106,9 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       component: :provider
     )
 
-    # if event_type != "response.output_text.delta" do
-    # IO.inspect(data, label: "#{event_type}: ", pretty: true, structs: false)
-    # end
+    if event_type != "response.output_text.delta" do
+      IO.inspect(data, label: "#{event_type}: ", pretty: true, structs: false)
+    end
 
     case event_type do
       "response.output_text.delta" ->
@@ -181,6 +181,12 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
       "response.output_item.done" ->
         case Map.get(data["item"], "type", nil) do
           "file_search_call" ->
+            IO.inspect(data,
+              label: "data in response.output_item.done: ",
+              pretty: true,
+              structs: false
+            )
+
             # IO.inspect(data["item"],
             #   label: "data[\"item\"] in response.output_item.done: ",
             #   pretty: true,
@@ -195,15 +201,21 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
                     queries: Map.get(data["item"], "queries", [])
                   })
                 ] ++
-                  Enum.map(Map.get(data["item"], "results", []), fn result ->
-                    ReqLLM.StreamChunk.meta(%{
-                      type: :file_citation,
-                      file_id: Map.get(result, "file_id", ""),
-                      filename: Map.get(result, "filename", ""),
-                      score: Map.get(result, "score", 0),
-                      text: Map.get(result, "text", "")
-                    })
-                  end)
+                  case Map.get(data["item"], "results") do
+                    nil ->
+                      []
+
+                    results ->
+                      Enum.map(results, fn result ->
+                        ReqLLM.StreamChunk.meta(%{
+                          type: :file_citation,
+                          file_id: Map.get(result, "file_id", ""),
+                          filename: Map.get(result, "filename", ""),
+                          score: Map.get(result, "score", 0),
+                          text: Map.get(result, "text", "")
+                        })
+                      end)
+                  end
 
               _ ->
                 []
@@ -433,7 +445,15 @@ defmodule ReqLLM.Providers.OpenAI.ResponsesAPI do
 
   defp build_request_body(context, model_name, opts, request) do
     opts_map = if is_map(opts), do: opts, else: Map.new(opts)
-    provider_opts = opts_map[:provider_options] || []
+
+    provider_opts =
+      opts_map[:provider_options] ||
+        %{}
+        |> IO.inspect(
+          label: "ResponsesAPI.build_request_body provider_opts: ",
+          pretty: true,
+          structs: false
+        )
 
     previous_response_id =
       provider_opts[:previous_response_id] ||
